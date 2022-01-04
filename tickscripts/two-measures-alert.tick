@@ -1,9 +1,7 @@
 var db = 'telegraf'
 var rp = 'autogen'
-var measurementDisk = 'disk'
-var groupByDisk = ['host']
-var whereFilterDisk = lambda: isPresent("used_percent")
-var period = 5m
+var groupBy = ['host']
+var period = 1m
 var every = 30s
 var name = 'diskspace'
 var idVar = name + '-{{.Group}}'
@@ -16,15 +14,22 @@ var outputDB = 'chronograf'
 var outputRP = 'autogen'
 var outputMeasurement = 'alerts'
 var triggerType = 'threshold'
+
+var measurementDisk = 'disk'
+var whereFilterDisk = lambda: isPresent("used_percent")
 var critDisk = 20
+
+var measurementMemory = 'mem'
+var whereFilterMemory = lambda: isPresent("used_percent")
+var critMemory = 20
 
 var dataDisk = stream
     |from()
         .database(db)
         .retentionPolicy(rp)
-        .measurement(measurement_disk)
+        .measurement(measurementDisk)
         .groupBy(groupBy)
-        .where(whereFilter)
+        .where(whereFilterDisk)
     |window()
         .period(period)
         .every(every)
@@ -32,9 +37,27 @@ var dataDisk = stream
     |mean('used_percent')
         .as('value')
 
+var dataMemory = stream
+    |from()
+        .database(db)
+        .retentionPolicy(rp)
+        .measurement(measurementMemory)
+        .groupBy(groupBy)
+        .where(whereFilterMemory)
+    |window()
+        .period(period)
+        .every(every)
+        .align()
+    |mean('used_percent')
+        .as('value')
+
+var data = dataDisk
+    |join (dataMemory)
+        .as('dataDisk','dataMemory')
+
 var trigger = data
     |alert()
-        .crit(lambda: "value" > crit)
+        .crit(lambda: "dataDisk.value"> critDisk AND "dataMemory.value" > critMemory)
         .stateChangesOnly()
         .message(message)
         .id(idVar)
