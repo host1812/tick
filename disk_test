@@ -1,0 +1,30 @@
+#!/bin/bash
+trap ctrl_c INT
+function ctrl_c() {
+  echo "** Trapped CTRL-C"
+  for pid in ${pids[@]}; do
+    echo $pid
+    kill $pid
+  done 
+  rm ./test*.img
+}
+
+min_size=${1:-10}
+max_size=${2:-20}
+threads=${3:-3}
+
+echo "$(date)"
+echo "min_size=${min_size}, max_size=${max_size}, threads=${threads}"
+pids=()
+for (( i=1 ; i<=$threads ; i++ ))
+do
+  while true
+  do
+    fallocate -l $(shuf -i ${min_size}-${max_size} -n 1)G test${i}.img
+    sleep 5
+    echo "" > ./test${i}.img
+  done &
+  pids+=($!)
+done
+
+sleep infinity
