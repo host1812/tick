@@ -1,0 +1,60 @@
+var db = 'telegraf'
+var rp = 'autogen'
+var measurementDisk = 'disk'
+var groupByDisk = ['host']
+var whereFilterDisk = lambda: isPresent("used_percent")
+var period = 5m
+var every = 30s
+var name = 'diskspace'
+var idVar = name + '-{{.Group}}'
+var message = ''
+var idTag = 'alertID'
+var levelTag = 'level'
+var messageField = 'message'
+var durationField = 'duration'
+var outputDB = 'chronograf'
+var outputRP = 'autogen'
+var outputMeasurement = 'alerts'
+var triggerType = 'threshold'
+var critDisk = 20
+
+var dataDisk = stream
+    |from()
+        .database(db)
+        .retentionPolicy(rp)
+        .measurement(measurement_disk)
+        .groupBy(groupBy)
+        .where(whereFilter)
+    |window()
+        .period(period)
+        .every(every)
+        .align()
+    |mean('used_percent')
+        .as('value')
+
+var trigger = data
+    |alert()
+        .crit(lambda: "value" > crit)
+        .stateChangesOnly()
+        .message(message)
+        .id(idVar)
+        .idTag(idTag)
+        .levelTag(levelTag)
+        .messageField(messageField)
+        .durationField(durationField)
+        .exec('/monitor/send_simple_alert')
+
+trigger
+    |eval(lambda: float("value"))
+        .as('value')
+        .keep()
+    |influxDBOut()
+        .create()
+        .database(outputDB)
+        .retentionPolicy(outputRP)
+        .measurement(outputMeasurement)
+        .tag('alertName', name)
+        .tag('triggerType', triggerType)
+
+trigger
+    |httpOut('output')
