@@ -52,12 +52,13 @@ var dataMemory = stream
         .as('value')
 
 var data = dataDisk
-    |join (dataMemory)
+    |join(dataMemory)
         .as('dataDisk','dataMemory')
+    |log()
 
 var trigger = data
     |alert()
-        .crit(lambda: "dataDisk.value"> critDisk AND "dataMemory.value" > critMemory)
+        .crit(lambda: "dataDisk.value" > critDisk AND "dataMemory.value" > critMemory)
         .stateChangesOnly()
         .message(message)
         .id(idVar)
@@ -66,10 +67,14 @@ var trigger = data
         .messageField(messageField)
         .durationField(durationField)
         .exec('/monitor/send_simple_alert')
+    |log()
 
 trigger
-    |eval(lambda: float("value"))
-        .as('value')
+    |eval(lambda: float("dataDisk.value"))
+        .as('disk_used_percent')
+        .keep()
+    |eval(lambda: float("dataMemory.value"))
+        .as('mem_used_percent')
         .keep()
     |influxDBOut()
         .create()
