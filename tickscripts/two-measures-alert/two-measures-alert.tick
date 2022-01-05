@@ -71,11 +71,9 @@ var trigger = data
 
 trigger
     |eval(lambda: float("dataDisk.value"))
-        .as('disk_used_percent')
+        .as('value')
         .keep()
-    |eval(lambda: float("dataMemory.value"))
-        .as('mem_used_percent')
-        .keep()
+    |log()
     |influxDBOut()
         .create()
         .database(outputDB)
