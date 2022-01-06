@@ -66,9 +66,9 @@ var data = dataMemory
         .fill(0)
     |log()
 
-var trigger = dataMemory
+var trigger = data
     |alert()
-        .crit(lambda: FALSE)
+        .crit(lambda: "dataMemory.value" > 30 AND "dataSqs.value" < 1000)
         .stateChangesOnly()
         .message(message)
         .id(idVar)
