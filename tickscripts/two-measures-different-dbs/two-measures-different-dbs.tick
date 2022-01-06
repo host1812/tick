@@ -1,0 +1,96 @@
+var period = 1m
+var every = 30s
+var name = 'two-measures-different-dbs'
+var idVar = name + '-{{.Group}}'
+var message = ''
+var idTag = 'alertID'
+var levelTag = 'level'
+var messageField = 'message'
+var durationField = 'duration'
+var outputDB = 'chronograf'
+var outputRP = 'autogen'
+var outputMeasurement = 'alerts'
+var triggerType = 'threshold'
+
+var dbSqs = 'remote_metrics'
+var rpSqs = 'autogen'
+var measurementSqs = 'sqs'
+var whereFilterSqs = lambda: isPresent("queue_messages")
+var critSqs = 20
+
+var dbMemory = 'telegraf'
+var rpMemory = 'autogen'
+var measurementMemory = 'mem'
+var whereFilterMemory = lambda: isPresent("used_percent")
+var critMemory = 20
+
+var dataSqs = stream
+    |from()
+        .database(dbSqs)
+        .retentionPolicy(rpSqs)
+        .measurement(measurementSqs)
+        .groupBy('queue_name')
+        .where(whereFilterSqs)
+    |window()
+        .period(period)
+        .every(every)
+        .align()
+    |mean('queue_messages')
+        .as('value')
+    |log()
+
+var dataMemory = stream
+    |from()
+        .database(dbMemory)
+        .retentionPolicy(rpMemory)
+        .measurement(measurementMemory)
+        .groupBy('host','queue_name')
+        .where(whereFilterMemory)
+    |window()
+        .period(period)
+        .every(every)
+        .align()
+    |mean('used_percent')
+        .as('value')
+    |eval(lambda: 'nlptest')
+        .as('queue_name')
+        .tags('queue_name')
+        .keep('value')
+    |log()
+
+var data = dataMemory
+    |join(dataSqs)
+        .as('dataMemory','dataSqs')
+        .on('queue_name')
+        .tolerance(30s)
+        .fill(0)
+    |log()
+
+var trigger = dataMemory
+    |alert()
+        .crit(lambda: FALSE)
+        .stateChangesOnly()
+        .message(message)
+        .id(idVar)
+        .idTag(idTag)
+        .levelTag(levelTag)
+        .messageField(messageField)
+        .durationField(durationField)
+        .exec('/monitor/send_simple_alert')
+    |log()
+
+trigger
+    |eval(lambda: float("dataMemory.value"))
+        .as('value')
+        .keep()
+    |log()
+    |influxDBOut()
+        .create()
+        .database(outputDB)
+        .retentionPolicy(outputRP)
+        .measurement(outputMeasurement)
+        .tag('alertName', name)
+        .tag('triggerType', triggerType)
+
+trigger
+    |httpOut('output')
